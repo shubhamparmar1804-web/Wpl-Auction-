@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WPL Auction Multiplayer</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #0f111a; color: #fff; text-align: center; margin: 0; padding: 20px; }
+    .container { max-width: 550px; margin: auto; }
+    .card { background: #1a1d2e; border-radius: 14px; padding: 20px; box-shadow: 0 6px 20px rgba(0,0,0,0.4); margin-bottom: 20px; border: 1px solid #282c44; }
+    h1 { color: #f39c12; margin-bottom: 5px; }
+    input, textarea { width: calc(100% - 24px); padding: 10px; margin: 8px 0; border-radius: 8px; border: 1px solid #3d4468; background: #0b0d14; color: #fff; }
+    button { background: #27ae60; border: none; padding: 12px 20px; color: #fff; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+    button.secondary { background: #2980b9; }
+    button:disabled { background: #444; cursor: not-allowed; }
+    .badge { background: #e84393; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 13px; }
+    .price { font-size: 32px; color: #2ecc71; font-weight: bold; margin: 12px 0; }
+    .timer { font-size: 32px; font-weight: bold; color: #e74c3c; }
+    .stats { display: flex; justify-content: space-between; border-bottom: 1px solid #2c3252; padding-bottom: 10px; margin-bottom: 10px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏏 WPL AUCTION</h1>
+
+    <!-- 1. LOBBY SCREEN -->
+    <div class="card" id="lobby-screen">
+      <h3>Create / Join Room</h3>
+      <input type="text" id="team-name" placeholder="Apna Team Name Likhein (e.g. MI, RCB)">
+      <input type="text" id="room-input" placeholder="Room Code (e.g. WPL101)">
+      
+      <details style="text-align: left; margin: 10px 0; color: #aaa;">
+        <summary style="cursor: pointer; color: #3498db;">➕ Custom Players Daalein (Optional)</summary>
+        <textarea id="custom-players-text" rows="3" placeholder="Format: Name, Role, BasePrice&#10;Kaur, All-Rounder, 50&#10;Perry, All-Rounder, 40"></textarea>
+      </details>
+
+      <button onclick="createRoom()">Create Room</button>
+      <button class="secondary" onclick="joinRoom()">Join Room</button>
+    </div>
+
+    <!-- 2. AUCTION SCREEN -->
+    <div id="game-screen" class="hidden">
+      <div id="status" style="color: #f1c40f; margin-bottom: 10px;">Waiting for opponent...</div>
+
+      <div class="card">
+        <span class="badge" id="player-role">Role</span>
+        <h2 id="player-name" style="margin: 10px 0;">--</h2>
+        <div class="price">₹ <span id="current-bid">0</span> Lakhs</div>
+        <div>Current Bidder: <strong id="bid-leader" style="color: #f39c12;">None</strong></div>
+        <div class="timer" id="timer">--</div>
+        <button id="bid-btn" onclick="sendBid()" disabled>BID (+ ₹10L)</button>
+      </div>
+
+      <div class="card">
+        <div class="stats">
+          <div>Team: <strong id="my-team">--</strong></div>
+          <div>Purse: <strong id="my-purse">₹ 500L</strong></div>
+        </div>
+        <h4 style="margin: 5px 0;">My Squad</h4>
+        <div id="my-squad" style="text-align: left; font-size: 14px; color: #bbb;">None</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let myData = null;
+
+    function parseCustomPlayers(text) {
+      if (!text.trim()) return null;
+      return text.trim().split('\n').map(line => {
+        const [name, role, basePrice] = line.split(',').map(s => s.trim());
+        return { name: name || "Player", role: role || "All-Rounder", basePrice: parseInt(basePrice) || 30 };
+      });
+    }
+
+    function createRoom() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      const teamName = document.getElementById('team-name').value.trim();
+      const customPlayers = parseCustomPlayers(document.getElementById('custom-players-text').value);
+
+      if (!roomCode) return alert('Room code likhna zaroori hai!');
+      socket.emit('create-room', { roomCode, customPlayers, teamName });
+    }
+
+    function joinRoom() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      const teamName = document.getElementById('team-name').value.trim();
+
+      if (!roomCode) return alert('Room code daaliye!');
+      socket.emit('join-room', { roomCode, teamName });
+    }
+
+    socket.on('error-msg', (msg) => alert(msg));
+
+    socket.on('room-joined', ({ roomCode, user }) => {
+      myData = user;
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('my-team').innerText = user.team;
+      document.getElementById('my-purse').innerText = `₹ ${user.purse}L`;
+      document.getElementById('status').innerText = `Room: ${roomCode} | Opponent ka wait ho raha hai...`;
+    });
+
+    socket.on('game-started', () => {
+      document.getElementById('status').innerText = "Auction Live!";
+    });
+
+    socket.on('new-player', ({ player, currentBid }) => {
+      document.getElementById('player-name').innerText = player.name;
+      document.getElementById('player-role').innerText = player.role;
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = "None";
+      document.getElementById('bid-btn').disabled = false;
+    });
+
+    socket.on('bid-placed', ({ currentBid, highestBidder }) => {
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = highestBidder;
+    });
+
+    socket.on('timer-tick', (time) => {
+      document.getElementById('timer').innerText = `${time}s`;
+    });
+
+    socket.on('player-sold', ({ player, winner, price }) => {
+      alert(`SOLD! ${player.name} sold to ${winner} for ₹${price}L`);
+      document.getElementById('bid-btn').disabled = true;
+    });
+
+    socket.on('player-unsold', ({ player }) => {
+      alert(`UNSOLD! ${player.name}`);
+      document.getElementById('bid-btn').disabled = true;
+    });
+
+    socket.on('update-users', (users) => {
+      if (myData && users[socket.id]) {
+        myData = users[socket.id];
+        document.getElementById('my-purse').innerText = `₹ ${myData.purse}L`;
+        document.getElementById('my-squad').innerHTML = myData.squad.map(p => `• ${p.name} (₹${p.price}L)`).join('<br>') || 'None';
+      }
+    });
+
+    socket.on('auction-ended', () => {
+      alert("🏁 Auction khatam ho chuki hai!");
+    });
+
+    function sendBid() {
+      socket.emit('place-bid');
+    }
+  </script>
+</body>
+</html>
