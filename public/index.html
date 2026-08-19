@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WPL Mega Auction & Tournament</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root { --primary: #f39c12; --bg: #0b0e1b; --card: #151a30; --accent: #2ecc71; --danger: #e74c3c; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: #fff; text-align: center; margin: 0; padding: 10px; }
+    .container { max-width: 550px; margin: auto; }
+    .card { background: var(--card); border-radius: 14px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); margin-bottom: 12px; border: 1px solid #273154; position: relative; }
+    h1, h2, h3 { color: var(--primary); margin: 4px 0; }
+    input, select { width: calc(100% - 24px); padding: 10px; margin: 6px 0; border-radius: 8px; border: 1px solid #36426d; background: #070a14; color: #fff; font-size: 15px; }
+    button { background: var(--accent); border: none; padding: 12px; color: #fff; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 6px; }
+    button.secondary { background: #3498db; }
+    button.sold-btn { background: #e67e22; width: 48%; display: inline-block; }
+    button.unsold-btn { background: var(--danger); width: 48%; display: inline-block; }
+    button:disabled { background: #444; cursor: not-allowed; }
+    .team-logos-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0; }
+    .team-badge-opt { border: 2px solid transparent; border-radius: 8px; padding: 4px; cursor: pointer; background: #0a0d18; }
+    .team-badge-opt.selected { border-color: var(--primary); background: #262e4d; }
+    .team-badge-opt img { width: 100%; max-width: 50px; height: 50px; object-fit: contain; }
+    .player-avatar { width: 120px; height: 120px; border-radius: 50%; background: #212946; margin: 6px auto; border: 3px solid var(--primary); display: block; object-fit: cover; }
+    .badge { background: #e84393; padding: 3px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; }
+    .badge-os { background: #8e44ad; }
+    .badge-ind { background: #27ae60; }
+    .badge-acc { background: #c0392b; animation: blinker 1s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0; } }
+    .price { font-size: 28px; color: var(--accent); font-weight: bold; margin: 4px 0; }
+    .timer-badge { font-size: 18px; font-weight: bold; color: var(--danger); background: #2d131a; padding: 4px 10px; border-radius: 12px; display: inline-block; }
+    .host-panel { background: #22142e; border: 1px dashed #9b59b6; border-radius: 10px; padding: 8px; margin-top: 8px; }
+    .squad-box { text-align: left; max-height: 130px; overflow-y: auto; font-size: 12px; color: #bbb; background: #090c17; padding: 8px; border-radius: 6px; }
+    
+    /* Live Chat */
+    #chat-box { position: fixed; bottom: 10px; right: 10px; width: 280px; z-index: 1000; text-align: left; }
+    .chat-messages { height: 110px; overflow-y: auto; background: rgba(15, 20, 36, 0.95); border: 1px solid #333f6b; border-radius: 8px; padding: 6px; font-size: 12px; }
+    .chat-msg { margin-bottom: 4px; word-break: break-all; }
+    .chat-input-area { display: flex; margin-top: 4px; }
+    .chat-input-area input { margin: 0; padding: 6px; font-size: 12px; }
+    .chat-input-area button { width: auto; padding: 6px 12px; margin: 0 0 0 4px; font-size: 12px; }
+
+    .wishlist-list { max-height: 300px; overflow-y: auto; text-align: left; font-size: 13px; background: #080b14; padding: 8px; border-radius: 8px; }
+    .match-card { background: #0b0e1b; border: 1px solid #3a4773; border-radius: 8px; padding: 10px; margin-bottom: 8px; text-align: left; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏏 WPL MEGA AUCTION</h1>
+
+    <!-- 1. LOBBY SCREEN -->
+    <div class="card" id="lobby-screen">
+      <h3>Select Your Franchise</h3>
+      <div class="team-logos-grid" id="team-selector">
+        <div class="team-badge-opt selected" onclick="selectFranchise('RCB', 'Royal Challengers Bengaluru', 'https://upload.wikimedia.org/wikipedia/en/2/2a/Royal_Challengers_Bangalore_2020.svg', this)">
+          <img src="https://upload.wikimedia.org/wikipedia/en/2/2a/Royal_Challengers_Bangalore_2020.svg" alt="RCB"><br><small>RCB</small>
+        </div>
+        <div class="team-badge-opt" onclick="selectFranchise('MI', 'Mumbai Indians', 'https://upload.wikimedia.org/wikipedia/en/c/cd/Mumbai_Indians_Logo.svg', this)">
+          <img src="https://upload.wikimedia.org/wikipedia/en/c/cd/Mumbai_Indians_Logo.svg" alt="MI"><br><small>MI</small>
+        </div>
+        <div class="team-badge-opt" onclick="selectFranchise('DC', 'Delhi Capitals', 'https://upload.wikimedia.org/wikipedia/en/f/f5/Delhi_Capitals_Logo.svg', this)">
+          <img src="https://upload.wikimedia.org/wikipedia/en/f/f5/Delhi_Capitals_Logo.svg" alt="DC"><br><small>DC</small>
+        </div>
+        <div class="team-badge-opt" onclick="selectFranchise('UPW', 'UP Warriorz', 'https://upload.wikimedia.org/wikipedia/en/7/7b/UP_Warriorz_Logo.png', this)">
+          <img src="https://upload.wikimedia.org/wikipedia/en/7/7b/UP_Warriorz_Logo.png" alt="UPW"><br><small>UPW</small>
+        </div>
+        <div class="team-badge-opt" onclick="selectFranchise('GG', 'Gujarat Giants', 'https://upload.wikimedia.org/wikipedia/en/8/87/Gujarat_Giants_Logo.png', this)">
+          <img src="https://upload.wikimedia.org/wikipedia/en/8/87/Gujarat_Giants_Logo.png" alt="GG"><br><small>GG</small>
+        </div>
+      </div>
+
+      <input type="text" id="room-input" placeholder="Room Code (e.g. WPL2026)">
+      
+      <label style="display:block; text-align:left; font-size:13px; color:#aaa;">Kitni Teams Khelenge?</label>
+      <select id="max-teams">
+        <option value="2">2 Teams</option>
+        <option value="3">3 Teams</option>
+        <option value="4">4 Teams</option>
+        <option value="5">5 Teams (Full WPL)</option>
+      </select>
+
+      <button onclick="createRoom()">Create Room</button>
+      <button class="secondary" onclick="joinRoom()">Join Room</button>
+    </div>
+
+    <!-- 2. AUCTION SCREEN -->
+    <div id="game-screen" class="hidden">
+      <!-- Top Bar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="font-weight: bold; color: var(--primary);"><img id="my-team-logo" src="" style="width:20px; vertical-align:middle;"> <span id="my-team-name">--</span></div>
+        <span class="timer-badge">⏳ <span id="timer">10</span>s</span>
+      </div>
+
+      <!-- Player Bidding Card -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa;">
+          <span id="round-badge" class="badge" style="background:#e67e22;">Round 1</span>
+          <span id="player-progress">Player 0 / 251</span>
+        </div>
+
+        <img id="player-img" class="player-avatar" src="" alt="Player">
+        <span class="badge" id="player-role">Role</span>
+        <span class="badge badge-ind" id="player-country">IND</span>
+
+        <h2 id="player-name">--</h2>
+        <div class="price">₹ <span id="current-bid">0</span> Lakhs</div>
+        <div style="font-size: 13px; margin-bottom: 6px;">Current Bidder: <strong id="bid-leader" style="color: var(--primary);">None</strong></div>
+        
+        <button id="bid-btn" onclick="sendBid()">PLACE BID</button>
+
+        <!-- Host Controls -->
+        <div id="host-controls" class="host-panel hidden">
+          <div style="font-size: 12px; color: #9b59b6; margin-bottom: 4px;">👑 Host Controls</div>
+          <button class="sold-btn" onclick="soldPlayer()">SOLD ✅</button>
+          <button class="unsold-btn" onclick="unsoldPlayer()">UNSOLD ❌</button>
+        </div>
+      </div>
+
+      <!-- Live Leaderboard of all teams -->
+      <div class="card">
+        <h4 style="margin: 0 0 8px 0; text-align: left; color: var(--primary);">📊 Live Leaderboard</h4>
+        <div id="live-leaderboard"></div>
+      </div>
+
+      <!-- My Squad Details -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <div>Purse: <strong id="my-purse" style="color:var(--accent);">₹ 15.00 Cr</strong></div>
+          <div>Squad: <strong id="squad-count" style="color:var(--primary);">0/16</strong></div>
+          <div>Overseas: <strong id="os-count" style="color:#e84393;">0/6</strong></div>
+        </div>
+        <div class="squad-box" id="my-squad">Squad me abhi koi player nahi hai.</div>
+      </div>
+    </div>
+
+    <!-- 3. ACCELERATED WISHLIST SUBMISSION SCREEN -->
+    <div id="wishlist-screen" class="hidden">
+      <div class="card">
+        <h2>⚡ Accelerated Round Wishlist</h2>
+        <p style="font-size: 12px; color: #aaa;">100 players pure ho chuke hain! Apni pasand ke players select karein, sirf wahi players fast-track auction me aayenge.</p>
+        <div class="wishlist-list" id="wishlist-items"></div>
+        <button onclick="submitWishlist()" style="background:#2980b9; margin-top:8px;">Submit My Wishlist</button>
+      </div>
+    </div>
+
+    <!-- 4. PLAYING 11 & CAPTAIN SELECTION SCREEN -->
+    <div id="playing11-screen" class="hidden">
+      <div class="card">
+        <h2>🏏 Select Playing 11 & Captain</h2>
+        <p style="font-size: 12px; color: #aaa;">Apne 16 me se exactly 11 players chun kar Captain (C - 2x Boost) aur Vice-Captain (VC - 1.5x Boost) select karein.</p>
+        <div id="p11-selection-list" style="text-align: left; max-height: 250px; overflow-y: auto; font-size: 13px;"></div>
+        <button onclick="submitPlaying11()" style="background:#27ae60; margin-top: 10px;">Lock Playing 11 & Enter Tournament</button>
+      </div>
+    </div>
+
+    <!-- 5. TOURNAMENT MATCHES SCREEN -->
+    <div id="tournament-screen" class="hidden">
+      <div class="card">
+        <h2>🏆 WPL TOURNAMENT RESULTS</h2>
+        <p style="font-size: 13px; color: #bbb;">Sabhi teams ki Playing 11 ke beech live T20 simulation complete hua!</p>
+        <div id="tournament-match-list"></div>
+        <button onclick="location.reload()" style="background:#e74c3c; margin-top:10px;">Play New Auction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING LIVE CHAT BOX -->
+  <div id="chat-box" class="hidden">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Chat ya emoji...">
+      <button onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let selectedTeam = { key: 'RCB', name: 'Royal Challengers Bengaluru', logo: 'https://upload.wikimedia.org/wikipedia/en/2/2a/Royal_Challengers_Bangalore_2020.svg' };
+    let myData = null;
+    let isHost = false;
+
+    let userId = localStorage.getItem('wpl_user_id') || ('user_' + Math.random().toString(36).substr(2, 9));
+    localStorage.setItem('wpl_user_id', userId);
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBidSound() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(850, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    }
+
+    function selectFranchise(key, name, logo, el) {
+      document.querySelectorAll('.team-badge-opt').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedTeam = { key, name, logo };
+    }
+
+    const savedRoom = localStorage.getItem('wpl_active_room');
+    if (savedRoom) {
+      socket.emit('reconnect-user', { userId, roomCode: savedRoom });
+    }
+
+    socket.on('reconnect-success', (data) => {
+      myData = data.user;
+      isHost = data.isHost;
+      setupGameUI(data.roomCode, data.user);
+      if (data.status === "BIDDING") {
+        document.getElementById('chat-box').classList.remove('hidden');
+      }
+    });
+
+    function createRoom() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      const maxTeams = document.getElementById('max-teams').value;
+      if (!roomCode) return alert('Room code daaliye!');
+      localStorage.setItem('wpl_active_room', roomCode);
+      socket.emit('create-room', { roomCode, teamKey: selectedTeam.key, teamName: selectedTeam.name, logo: selectedTeam.logo, userId, maxTeams });
+    }
+
+    function joinRoom() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      if (!roomCode) return alert('Room code daaliye!');
+      localStorage.setItem('wpl_active_room', roomCode);
+      socket.emit('join-room', { roomCode, teamKey: selectedTeam.key, teamName: selectedTeam.name, logo: selectedTeam.logo, userId });
+    }
+
+    function setupGameUI(roomCode, user) {
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('chat-box').classList.remove('hidden');
+      document.getElementById('my-team-name').innerText = user.teamName;
+      document.getElementById('my-team-logo').src = user.logo;
+      if (isHost) document.getElementById('host-controls').classList.remove('hidden');
+    }
+
+    socket.on('room-joined', ({ roomCode, user, isHost: hostStatus }) => {
+      myData = user;
+      isHost = hostStatus;
+      setupGameUI(roomCode, user);
+    });
+
+    socket.on('error-msg', (msg) => alert(msg));
+
+    // Accelerated Wishlist Phase Opened
+    socket.on('open-wishlist-modal', ({ remainingPlayers }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('wishlist-screen').classList.remove('hidden');
+
+      const container = document.getElementById('wishlist-items');
+      container.innerHTML = remainingPlayers.map((p, i) => `
+        <div style="margin: 4px 0; border-bottom:1px solid #1a223f; padding-bottom:4px;">
+          <label>
+            <input type="checkbox" class="wishlist-cb" value="${p.name}"> 
+            <strong>${p.name}</strong> [${p.country}] (${p.role}) - ₹${p.basePrice}L
+          </label>
+        </div>
+      `).join('');
+    });
+
+    function submitWishlist() {
+      const selected = Array.from(document.querySelectorAll('.wishlist-cb:checked')).map(cb => cb.value);
+      socket.emit('submit-wishlist', { selectedPlayerNames: selected });
+      document.getElementById('wishlist-screen').innerHTML = '<div class="card"><h3>⏳ Wishlist Submit Ho Gayi! Doosri teams ke submit karne ka wait ho raha hai...</h3></div>';
+    }
+
+    socket.on('wishlist-progress', ({ submittedCount, totalTeams }) => {
+      alert(`Wishlist Received: ${submittedCount}/${totalTeams} Teams`);
+    });
+
+    socket.on('accelerated-round-start', ({ total }) => {
+      alert(`⚡ ACCELERATED FAST-TRACK ROUND SHURU! (Requested Pool: ${total} Players, Fast 5s Timer)`);
+      document.getElementById('wishlist-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+    });
+
+    socket.on('new-player', ({ player, currentBid, index, total, round, isAccelerated }) => {
+      const rBadge = document.getElementById('round-badge');
+      rBadge.innerText = isAccelerated ? `⚡ Accelerated (Round ${round})` : `Round ${round || 1}`;
+      rBadge.className = isAccelerated ? "badge badge-acc" : "badge";
+
+      document.getElementById('player-name').innerText = player.name;
+      document.getElementById('player-role').innerText = player.role;
+      document.getElementById('player-img').src = player.img;
+      document.getElementById('player-progress').innerText = `Player ${index} / ${total}`;
+      
+      const cBadge = document.getElementById('player-country');
+      cBadge.innerText = player.country;
+      cBadge.className = player.isOverseas ? "badge badge-os" : "badge badge-ind";
+
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = "None";
+      document.getElementById('bid-btn').disabled = false;
+    });
+
+    socket.on('timer-tick', (time) => {
+      document.getElementById('timer').innerText = time;
+    });
+
+    socket.on('bid-placed', ({ currentBid, highestBidder }) => {
+      playBidSound();
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = highestBidder;
+    });
+
+    socket.on('player-sold', ({ player, winner, price }) => {
+      alert(`🎉 SOLD! ${player.name} sold to ${winner} for ₹${price}L`);
+    });
+
+    socket.on('player-unsold', ({ player }) => {
+      alert(`❌ UNSOLD! ${player.name}`);
+    });
+
+    function formatPurse(lakhs) {
+      return lakhs >= 100 ? `₹ ${(lakhs / 100).toFixed(2)} Cr` : `₹ ${lakhs}L`;
+    }
+
+    socket.on('update-users', (users) => {
+      if (myData && users[userId]) {
+        myData = users[userId];
+        document.getElementById('my-purse').innerText = formatPurse(myData.purse);
+        document.getElementById('squad-count').innerText = `${myData.squad.length}/16`;
+        document.getElementById('os-count').innerText = `${myData.overseasCount}/6`;
+        document.getElementById('my-squad').innerHTML = myData.squad.map((p, idx) => 
+          `<div>${idx + 1}. ${p.name} [${p.country}] (${p.role}) - ₹${p.price}L</div>`
+        ).join('') || 'Squad me abhi koi player nahi hai.';
+      }
+
+      const lb = document.getElementById('live-leaderboard');
+      lb.innerHTML = Object.values(users).map(u => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#0c0f1c; padding:6px; border-radius:6px; margin-bottom:4px; font-size:13px;">
+          <div><img src="${u.logo}" style="width:20px; vertical-align:middle; margin-right:5px;"><strong>${u.teamName}</strong></div>
+          <div>Squad: ${u.squad.length}/16 | Purse: <strong style="color:var(--accent);">${formatPurse(u.purse)}</strong></div>
+        </div>
+      `).join('');
+    });
+
+    function sendChat() {
+      const input = document.getElementById('chat-input');
+      if (input.value.trim()) {
+        socket.emit('send-chat', { message: input.value });
+        input.value = '';
+      }
+    }
+
+    socket.on('new-chat-message', ({ sender, logo, message }) => {
+      const cBox = document.getElementById('chat-messages');
+      const msgEl = document.createElement('div');
+      msgEl.className = 'chat-msg';
+      msgEl.innerHTML = `<img src="${logo}" style="width:14px;vertical-align:middle;"> <strong>${sender}:</strong> ${message}`;
+      cBox.appendChild(msgEl);
+      cBox.scrollTop = cBox.scrollHeight;
+    });
+
+    socket.on('auction-ended', ({ users }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('playing11-screen').classList.remove('hidden');
+
+      const p11List = document.getElementById('p11-selection-list');
+      if (myData && myData.squad.length > 0) {
+        p11List.innerHTML = myData.squad.map((p, i) => `
+          <div style="margin: 6px 0; background:#0c0f1c; padding:6px; border-radius:6px;">
+            <input type="checkbox" class="p11-checkbox" value="${i}" ${i < 11 ? 'checked' : ''}> <strong>${p.name}</strong> [${p.country}] (${p.role})
+            <div style="margin-top:4px;">
+              <label><input type="radio" name="captain" value="${i}" ${i === 0 ? 'checked' : ''}> Captain (C)</label>
+              <label style="margin-left:10px;"><input type="radio" name="vc" value="${i}" ${i === 1 ? 'checked' : ''}> Vice-Captain (VC)</label>
+            </div>
+          </div>
+        `).join('');
+      } else {
+       
