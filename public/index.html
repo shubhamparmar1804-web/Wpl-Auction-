@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WPL Pro Mega Auction</title>
+  <!-- Direct Internal Socket Script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0e1b; color: #fff; text-align: center; margin: 0; padding: 10px; }
+    .container { max-width: 480px; margin: auto; }
+    .card { background: #151a30; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #273154; }
+    h1, h2, h3 { color: #f39c12; margin: 6px 0; }
+    
+    .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0; }
+    .team-btn { background: #0a0d18; border: 2px solid #273154; border-radius: 8px; padding: 10px 2px; color: #fff; cursor: pointer; font-size: 11px; font-weight: bold; }
+    .team-btn.active { border-color: #f39c12; background: #262e4d; color: #f39c12; }
+    
+    input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #36426d; background: #070a14; color: #fff; font-size: 15px; }
+    button.action-btn { background: #2ecc71; border: none; padding: 13px; color: #fff; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 8px; }
+    button.join-btn { background: #3498db; }
+    button.sold-btn { background: #e67e22; width: 48%; display: inline-block; padding: 10px; border: none; border-radius: 6px; color: #fff; font-weight: bold; }
+    button.unsold-btn { background: #e74c3c; width: 48%; display: inline-block; padding: 10px; border: none; border-radius: 6px; color: #fff; font-weight: bold; }
+    
+    .player-avatar { width: 110px; height: 110px; border-radius: 50%; background: #212946; margin: 6px auto; border: 3px solid #f39c12; display: block; object-fit: cover; }
+    .badge { background: #e84393; padding: 3px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; }
+    .badge-os { background: #8e44ad; }
+    .badge-ind { background: #27ae60; }
+    .price { font-size: 28px; color: #2ecc71; font-weight: bold; margin: 4px 0; }
+    .timer-badge { font-size: 18px; font-weight: bold; color: #e74c3c; background: #2d131a; padding: 4px 10px; border-radius: 12px; display: inline-block; }
+    
+    .host-panel { background: #22142e; border: 1px dashed #9b59b6; border-radius: 10px; padding: 8px; margin-top: 8px; }
+    .squad-box { text-align: left; max-height: 130px; overflow-y: auto; font-size: 12px; color: #bbb; background: #090c17; padding: 8px; border-radius: 6px; }
+    
+    #chat-box { position: fixed; bottom: 8px; right: 8px; width: 260px; z-index: 1000; text-align: left; }
+    .chat-messages { height: 100px; overflow-y: auto; background: rgba(15, 20, 36, 0.95); border: 1px solid #333f6b; border-radius: 8px; padding: 6px; font-size: 12px; }
+    .chat-input-area { display: flex; margin-top: 4px; }
+    .chat-input-area input { margin: 0; padding: 6px; font-size: 12px; }
+    .chat-input-area button { width: auto; padding: 6px 12px; margin-left: 4px; font-size: 12px; background: #2ecc71; border: none; color: #fff; border-radius: 6px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏏 WPL MEGA AUCTION</h1>
+
+    <!-- 1. LOBBY SCREEN -->
+    <div class="card" id="lobby-screen">
+      <h3>Select Your Team</h3>
+      <div class="team-grid">
+        <button type="button" class="team-btn active" onclick="chooseTeam('RCB', 'Royal Challengers Bengaluru', '🦁', this)">RCB<br>🦁</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('MI', 'Mumbai Indians', '🌀', this)">MI<br>🌀</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('DC', 'Delhi Capitals', '🐯', this)">DC<br>🐯</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('UPW', 'UP Warriorz', '⚔️', this)">UPW<br>⚔️</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('GG', 'Gujarat Giants', '⚡', this)">GG<br>⚡</button>
+      </div>
+
+      <input type="text" id="room-input" placeholder="Room Code (e.g. 101)">
+      
+      <label style="display:block; text-align:left; font-size:13px; color:#aaa;">Kitni Teams Khelenge?</label>
+      <select id="max-teams">
+        <option value="2">2 Teams</option>
+        <option value="3">3 Teams</option>
+        <option value="4">4 Teams</option>
+        <option value="5">5 Teams (Full WPL)</option>
+      </select>
+
+      <button type="button" class="action-btn" onclick="createRoomAction()">Create Room</button>
+      <button type="button" class="action-btn join-btn" onclick="joinRoomAction()">Join Room</button>
+    </div>
+
+    <!-- 2. GAME SCREEN -->
+    <div id="game-screen" class="hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="font-weight: bold; color: #f39c12;">
+          <span id="my-team-logo" style="font-size:18px;">🦁</span>
+          <span id="my-team-name">RCB</span>
+        </div>
+        <span class="timer-badge">⏳ <span id="timer">10</span>s</span>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa;">
+          <span id="round-badge" class="badge">Round 1</span>
+          <span id="player-progress">Player 0 / 251</span>
+        </div>
+
+        <img id="player-img" class="player-avatar" src="" alt="Player">
+        <span class="badge" id="player-role">Role</span>
+        <span class="badge badge-ind" id="player-country">IND</span>
+
+        <h2 id="player-name">--</h2>
+        <div class="price">₹ <span id="current-bid">0</span> Lakhs</div>
+        <div style="font-size: 13px; margin-bottom: 6px;">Current Bidder: <strong id="bid-leader" style="color: #f39c12;">None</strong></div>
+        
+        <button type="button" class="action-btn" id="bid-btn" onclick="sendBid()">PLACE BID</button>
+
+        <div id="host-controls" class="host-panel hidden">
+          <div style="font-size: 12px; color: #9b59b6; margin-bottom: 4px;">👑 Host Controls</div>
+          <button type="button" class="sold-btn" onclick="soldPlayer()">SOLD ✅</button>
+          <button type="button" class="unsold-btn" onclick="unsoldPlayer()">UNSOLD ❌</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin: 0 0 8px 0; text-align: left; color: #f39c12;">📊 Live Leaderboard</h4>
+        <div id="live-leaderboard"></div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <div>Purse: <strong id="my-purse" style="color:#2ecc71;">₹ 15.00 Cr</strong></div>
+          <div>Squad: <strong id="squad-count" style="color:#f39c12;">0/16</strong></div>
+          <div>Overseas: <strong id="os-count" style="color:#e84393;">0/6</strong></div>
+        </div>
+        <div class="squad-box" id="my-squad">Squad me abhi koi player nahi hai.</div>
+      </div>
+    </div>
+
+    <!-- 3. WISHLIST MODAL -->
+    <div id="wishlist-screen" class="hidden">
+      <div class="card">
+        <h2>⚡ Accelerated Round Wishlist</h2>
+        <p style="font-size: 12px; color: #aaa;">100 players pure ho gaye hain! Apni pasand ke players select karein.</p>
+        <div id="wishlist-items" style="max-height: 250px; overflow-y: auto; text-align: left; font-size: 13px;"></div>
+        <button type="button" class="action-btn join-btn" onclick="submitWishlist()">Submit My Wishlist</button>
+      </div>
+    </div>
+
+    <!-- 4. PLAYING 11 SCREEN -->
+    <div id="playing11-screen" class="hidden">
+      <div class="card">
+        <h2>🏏 Select Playing 11 & Captain</h2>
+        <div id="p11-selection-list" style="text-align: left; max-height: 250px; overflow-y: auto; font-size: 13px;"></div>
+        <button type="button" class="action-btn" onclick="submitPlaying11()">Lock Playing 11 & Simulate</button>
+      </div>
+    </div>
+
+    <!-- 5. TOURNAMENT RESULTS SCREEN -->
+    <div id="tournament-screen" class="hidden">
+      <div class="card">
+        <h2>🏆 WPL TOURNAMENT RESULTS</h2>
+        <div id="tournament-match-list" style="text-align: left;"></div>
+        <button type="button" class="action-btn" onclick="location.reload()" style="background:#e74c3c; margin-top:10px;">Play New Auction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING CHAT -->
+  <div id="chat-box" class="hidden">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Chat...">
+      <button type="button" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    socket.on('connect', () => {
+      console.log("Connected to server successfully!");
+    });
+
+    socket.on('connect_error', () => {
+      alert("Server se connection nahi ban pa raha! Please 30 second wait karke reload karein.");
+    });
+
+    let myTeam = { key: 'RCB', name: 'Royal Challengers Bengaluru', logo: '🦁' };
+    let myData = null;
+    let isHost = false;
+
+    function chooseTeam(key, name, logo, el) {
+      document.querySelectorAll('.team-btn').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      myTeam = { key, name, logo };
+    }
+
+    function createRoomAction() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      const maxTeams = document.getElementById('max-teams').value;
+      if (!roomCode) {
+        alert('Kripya Room Code dalein!');
+        return;
+      }
+
+      socket.emit('create-room', {
+        roomCode,
+        teamKey: myTeam.key,
+        teamName: myTeam.name,
+        logo: myTeam.logo,
+        maxTeams
+      });
+    }
+
+    function joinRoomAction() {
+      const roomCode = document.getElementById('room-input').value.trim();
+      if (!roomCode) {
+        alert('Kripya Room Code dalein!');
+        return;
+      }
+
+      socket.emit('join-room', {
+        roomCode,
+        teamKey: myTeam.key,
+        teamName: myTeam.name,
+        logo: myTeam.logo
+      });
+    }
+
+    socket.on('error-msg', (msg) => alert(msg));
+
+    socket.on('room-joined', ({ roomCode, user, isHost: hostStatus }) => {
+      myData = user;
+      isHost = hostStatus;
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('chat-box').classList.remove('hidden');
+
+      document.getElementById('my-team-name').innerText = user.teamName;
+      document.getElementById('my-team-logo').innerText = user.logo;
+
+      if (isHost) document.getElementById('host-controls').classList.remove('hidden');
+    });
+
+    socket.on('new-player', ({ player, currentBid, index, total, round, isAccelerated }) => {
+      document.getElementById('round-badge').innerText = isAccelerated ? `⚡ Acc (R${round})` : `Round ${round || 1}`;
+      document.getElementById('player-name').innerText = player.name;
+      document.getElementById('player-role').innerText = player.role;
+      document.getElementById('player-img').src = player.img;
+      document.getElementById('player-progress').innerText = `Player ${index} / ${total}`;
+      
+      const cBadge = document.getElementById('player-country');
+      cBadge.innerText = player.country;
+      cBadge.className = player.isOverseas ? "badge badge-os" : "badge badge-ind";
+
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = "None";
+      document.getElementById('bid-btn').disabled = false;
+    });
+
+    socket.on('timer-tick', (time) => {
+      document.getElementById('timer').innerText = time;
+    });
+
+    socket.on('bid-placed', ({ currentBid, highestBidder }) => {
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = highestBidder;
+    });
+
+    socket.on('player-sold', ({ player, winner, price }) => {
+      alert(`🎉 SOLD! ${player.name} sold to ${winner} for ₹${price}L`);
+    });
+
+    socket.on('player-unsold', ({ player }) => {
+      alert(`❌ UNSOLD! ${player.name}`);
+    });
+
+    function formatPurse(lakhs) {
+      return lakhs >= 100 ? `₹ ${(lakhs / 100).toFixed(2)} Cr` : `₹ ${lakhs}L`;
+    }
+
+    socket.on('update-users', (users) => {
+      if (myData && users[socket.id]) {
+        myData = users[socket.id];
+        document.getElementById('my-purse').innerText = formatPurse(myData.purse);
+        document.getElementById('squad-count').innerText = `${myData.squad.length}/16`;
+        document.getElementById('os-count').innerText = `${myData.overseasCount}/6`;
+        document.getElementById('my-squad').innerHTML = myData.squad.map((p, idx) => 
+          `<div>${idx + 1}. ${p.name} [${p.country}] (${p.role}) - ₹${p.price}L</div>`
+        ).join('') || 'Squad me abhi koi player nahi hai.';
+      }
+
+      const lb = document.getElementById('live-leaderboard');
+      lb.innerHTML = Object.values(users).map(u => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#0c0f1c; padding:6px; border-radius:6px; margin-bottom:4px; font-size:13px;">
+          <div><span style="font-size:16px; margin-right:4px;">${u.logo}</span><strong>${u.teamName}</strong></div>
+          <div>Squad: ${u.squad.length}/16 | Purse: <strong style="color:#2ecc71;">${formatPurse(u.purse)}</strong></div>
+        </div>
+      `).join('');
+    });
+
+    function sendChat() {
+      const input = document.getElementById('chat-input');
+      if (input.value.trim()) {
+        socket.emit('send-chat', { message: input.value });
+        input.value = '';
+      }
+    }
+
+    socket.on('new-chat-message', ({ sender, logo, message }) => {
+      const cBox = document.getElementById('chat-messages');
+      const msgEl = document.createElement('div');
+      msgEl.innerHTML = `<span>${logo}</span> <strong>${sender}:</strong> ${message}`;
+      cBox.appendChild(msgEl);
+      cBox.scrollTop = cBox.scrollHeight;
+    });
+
+    socket.on('open-wishlist-modal', ({ remainingPlayers }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('wishlist-screen').classList.remove('hidden');
+
+      const container = document.getElementById('wishlist-items');
+      container.innerHTML = remainingPlayers.map((p) => `
+        <div style="margin: 4px 0; border-bottom:1px solid #1a223f; padding-bottom:4px;">
+          <label>
+            <input type="checkbox" class="wishlist-cb" value="${p.name}"> 
+            <strong>${p.name}</strong> [${p.country}] (${p.role}) - ₹${p.basePrice}L
+          </label>
+        </div>
+      `).join('');
+    });
+
+    function submitWishlist() {
+      const selected = Array.from(document.querySelectorAll('.wishlist-cb:checked')).map(cb => cb.value);
+      socket.emit('submit-wishlist', { selectedPlayerNames: selected });
+      document.getElementById('wishlist-screen').innerHTML = '<div class="card"><h3>⏳ Wishlist Submitted! Waiting for opponents...</h3></div>';
+    }
+
+    socket.on('accelerated-round-start', ({ total }) => {
+      alert(`⚡ Accelerated Fast-Track Round Live! Players: ${total}`);
+      document.getElementById('wishlist-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+    });
+
+    socket.on('auction-ended', ({ users }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('playing11-screen').classList.remove('hidden');
+
+      const p11List = document.getElementById('p11-selection-list');
+      if (myData && myData.squad.length > 0) {
+        p11List.innerHTML = myData.squad.map((p, i) => `
+          <div style="margin: 6px 0; background:#0c0f1c; padding:6px; border-radius:6px;">
+            <input type="checkbox" class="p11-checkbox" value="${i}" ${i < 11 ? 'checked' : ''}> <strong>${p.name}</strong> [${p.country}] (${p.role})
+            <div style="margin-top:4px;">
+              <label><input type="radio" name="captain" value="${i}" ${i === 0 ? 'checked' : ''}> (C)</label>
+              <label style="margin-left:10px;"><input type="radio" name="vc" value="${i}" ${i === 1 ? 'checked' : ''}> (VC)</label>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        p11List.innerHTML = 'No players in squad.';
+      }
+    });
+
+    function submitPlaying11() {
+      const checkedBoxes = Array.from(document.querySelectorAll('.p11-checkbox:checked')).map(cb => parseInt(cb.value));
+      if (checkedBoxes.length !== 11 && myData.squad.length >= 11) {
+        return alert('Kripya exactly 11 players select karein!');
+      }
+
+      const captIdx = parseInt(document.querySelector('input[name="captain"]:checked')?.value || checkedBoxes[0]);
+      const vcIdx = parseInt(document.querySelector('input[name="vc"]:checked')?.value || checkedBoxes[1]);
+
+      const playing11 = checkedBoxes.map(i => ({
+        ...myData.squad[i],
+        isCaptain: i === captIdx,
+        isVC: i === vcIdx
+      }));
+
+      socket.emit('submit-playing-11', { playing11 });
+      document.getElementById('playing11-screen').innerHTML = '<div class="card"><h3>⏳ Waiting for opponents to lock Playing 11...</h3></div>';
+    }
+
+    socket.on('tournament-results', ({ matchResults }) => {
+      document.getElementById('playing11-screen').classList.add('hidden');
+      document.getElementById('tournament-screen').classList.remove('hidden');
+
+      const mList = document.getElementById('tournament-match-list');
+      mList.innerHTML = matchResults.map((m, idx) => `
+        <div style="background:#0c0f1c; padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid #333f6b;">
+          <div style="color:#f39c12; font-weight:bold;">Match ${idx + 1}</div>
+          <div>${m.teamA.logo} ${m.teamA.name}: <strong>${m.teamA.runs}/${m.teamA.wickets}</strong></div>
+          <div>${m.teamB.logo} ${m.teamB.name}: <strong>${m.teamB.runs}/${m.teamB.wickets}</strong></div>
+          <div style="color:#2ecc71; font-weight:bold; margin-top:4px;">🏆 Winner: ${m.winner}</div>
+        </div>
+      `).join('');
+    });
+
+    function sendBid() { socket.emit('place-bid'); }
+    function soldPlayer() { socket.emit('host-action-sold'); }
+    function unsoldPlayer() { socket.emit('host-action-unsold'); }
+  </script>
+</body>
+</html>
