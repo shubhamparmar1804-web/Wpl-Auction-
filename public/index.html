@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WPL Pro Mega Auction & Super Over</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0e1b; color: #fff; text-align: center; margin: 0; padding: 10px; padding-bottom: 70px; }
+    .container { max-width: 480px; margin: auto; }
+    .card { background: #151a30; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #273154; }
+    h1, h2, h3, h4 { color: #f39c12; margin: 4px 0; }
+    
+    .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0; }
+    .team-btn { background: #0a0d18; border: 2px solid #273154; border-radius: 8px; padding: 10px 2px; color: #fff; cursor: pointer; font-size: 11px; font-weight: bold; }
+    .team-btn.active { border-color: #f39c12; background: #262e4d; color: #f39c12; }
+    
+    input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #36426d; background: #070a14; color: #fff; font-size: 15px; }
+    button.action-btn { background: #2ecc71; border: none; padding: 13px; color: #fff; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 8px; }
+    button.join-btn { background: #3498db; }
+    button.sold-btn { background: #e67e22; width: 48%; display: inline-block; padding: 10px; border: none; border-radius: 6px; color: #fff; font-weight: bold; }
+    button.unsold-btn { background: #e74c3c; width: 48%; display: inline-block; padding: 10px; border: none; border-radius: 6px; color: #fff; font-weight: bold; }
+    
+    .player-avatar { width: 115px; height: 115px; border-radius: 50%; background: #1c243f; margin: 6px auto; border: 3px solid #f39c12; display: block; object-fit: cover; }
+    .badge { background: #e84393; padding: 3px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; }
+    .badge-os { background: #8e44ad; }
+    .badge-ind { background: #27ae60; }
+    .price { font-size: 26px; color: #2ecc71; font-weight: bold; margin: 4px 0; }
+    .timer-badge { font-size: 16px; font-weight: bold; color: #e74c3c; background: #2d131a; padding: 4px 10px; border-radius: 12px; display: inline-block; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #0b0f20; padding: 6px; border-radius: 8px; margin: 8px 0; border: 1px solid #1f2747; font-size: 11px; }
+    .stat-item span { display: block; color: #f39c12; font-weight: bold; font-size: 13px; }
+    
+    .shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+    .shot-btn { background: #1e284a; border: 1px solid #f39c12; color: #fff; font-weight: bold; padding: 12px 6px; border-radius: 8px; cursor: pointer; }
+    .shot-btn:hover { background: #f39c12; color: #000; }
+    
+    #chat-box { position: fixed; bottom: 6px; right: 6px; width: 190px; z-index: 1000; text-align: left; }
+    .chat-messages { height: 65px; overflow-y: auto; background: rgba(11, 14, 27, 0.95); border: 1px solid #333f6b; border-radius: 6px; padding: 4px; font-size: 10.5px; }
+    .chat-input-area { display: flex; margin-top: 3px; }
+    .chat-input-area input { margin: 0; padding: 4px 6px; font-size: 11px; height: 26px; border-radius: 4px; }
+    .chat-input-area button { width: auto; padding: 0 8px; margin-left: 3px; font-size: 11px; height: 26px; background: #2ecc71; border: none; color: #fff; border-radius: 4px; font-weight: bold; }
+
+    .host-panel { background: #22142e; border: 1px dashed #9b59b6; border-radius: 10px; padding: 8px; margin-top: 8px; }
+    .squad-box { text-align: left; max-height: 130px; overflow-y: auto; font-size: 12px; color: #bbb; background: #090c17; padding: 8px; border-radius: 6px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏏 WPL MEGA AUCTION</h1>
+
+    <!-- 1. LOBBY SCREEN -->
+    <div class="card" id="lobby-screen">
+      <h3>Select Your Team</h3>
+      <div class="team-grid">
+        <button type="button" class="team-btn active" onclick="chooseTeam('RCB', 'Royal Challengers Bengaluru', '🦁', this)">RCB<br>🦁</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('MI', 'Mumbai Indians', '🌀', this)">MI<br>🌀</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('DC', 'Delhi Capitals', '🐯', this)">DC<br>🐯</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('UPW', 'UP Warriorz', '⚔️', this)">UPW<br>⚔️</button>
+        <button type="button" class="team-btn" onclick="chooseTeam('GG', 'Gujarat Giants', '⚡', this)">GG<br>⚡</button>
+      </div>
+
+      <input type="text" id="room-input" placeholder="Room Code (e.g. 101)">
+      
+      <label style="display:flex; align-items:center; justify-content:center; gap:8px; font-size:14px; margin: 6px 0; color:#f1c40f;">
+        <input type="checkbox" id="solo-mode" style="width:18px; height:18px; margin:0;"> 🤖 Play with AI Bots (Solo Mode)
+      </label>
+
+      <label style="display:block; text-align:left; font-size:13px; color:#aaa;">Kitni Teams Khelenge?</label>
+      <select id="max-teams">
+        <option value="2">2 Teams</option>
+        <option value="3">3 Teams</option>
+        <option value="4">4 Teams</option>
+        <option value="5">5 Teams (Full WPL)</option>
+      </select>
+
+      <button type="button" class="action-btn" onclick="createRoomAction()">Create Room</button>
+      <button type="button" class="action-btn join-btn" onclick="joinRoomAction()">Join Room</button>
+    </div>
+
+    <!-- 2. GAME SCREEN -->
+    <div id="game-screen" class="hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="font-weight: bold; color: #f39c12;">
+          <span id="my-team-logo" style="font-size:18px;">🦁</span>
+          <span id="my-team-name">RCB</span>
+        </div>
+        <span class="timer-badge">⏳ <span id="timer">10</span>s</span>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa;">
+          <span id="round-badge" class="badge">Round 1</span>
+          <span id="player-progress">Player 0 / 251</span>
+        </div>
+
+        <img id="player-img" class="player-avatar" src="" alt="Player" onerror="this.onerror=null; this.src='https://static.cricbuzz.com/a/img/v1/150x150/i1/c170661/avatar.jpg';">
+        <span class="badge" id="player-role">Role</span>
+        <span class="badge badge-ind" id="player-country">IND</span>
+
+        <h2 id="player-name">--</h2>
+
+        <!-- REAL PLAYER STATS CARD -->
+        <div class="stats-grid">
+          <div class="stat-item">Matches<span id="stat-mat">0</span></div>
+          <div class="stat-item">Runs<span id="stat-runs">0</span></div>
+          <div class="stat-item">Strike Rate<span id="stat-sr">0.0</span></div>
+          <div class="stat-item">Wickets<span id="stat-wkt">0</span></div>
+        </div>
+
+        <div class="price">₹ <span id="current-bid">0</span> Lakhs</div>
+        <div style="font-size: 13px; margin-bottom: 6px;">Current Bidder: <strong id="bid-leader" style="color: #f39c12;">None</strong></div>
+        
+        <button type="button" class="action-btn" id="bid-btn" onclick="sendBid()">PLACE BID</button>
+
+        <div id="host-controls" class="host-panel hidden">
+          <div style="font-size: 12px; color: #9b59b6; margin-bottom: 4px;">👑 Host Controls</div>
+          <button type="button" class="sold-btn" onclick="soldPlayer()">SOLD ✅</button>
+          <button type="button" class="unsold-btn" onclick="unsoldPlayer()">UNSOLD ❌</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin: 0 0 8px 0; text-align: left; color: #f39c12;">📊 Live Leaderboard</h4>
+        <div id="live-leaderboard"></div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <div>Purse: <strong id="my-purse" style="color:#2ecc71;">₹ 15.00 Cr</strong></div>
+          <div>Squad: <strong id="squad-count" style="color:#f39c12;">0/16</strong></div>
+          <div>Overseas: <strong id="os-count" style="color:#e84393;">0/6</strong></div>
+        </div>
+        <div class="squad-box" id="my-squad">Squad me abhi koi player nahi hai.</div>
+      </div>
+    </div>
+
+    <!-- 3. WISHLIST MODAL -->
+    <div id="wishlist-screen" class="hidden">
+      <div class="card">
+        <h2>⚡ Accelerated Round Wishlist</h2>
+        <div id="wishlist-items" style="max-height: 250px; overflow-y: auto; text-align: left; font-size: 13px;"></div>
+        <button type="button" class="action-btn join-btn" onclick="submitWishlist()">Submit My Wishlist</button>
+      </div>
+    </div>
+
+    <!-- 4. PLAYING 11 SCREEN -->
+    <div id="playing11-screen" class="hidden">
+      <div class="card">
+        <h2>🏏 Select Playing 11 & Captain</h2>
+        <div id="p11-selection-list" style="text-align: left; max-height: 250px; overflow-y: auto; font-size: 13px;"></div>
+        <button type="button" class="action-btn" onclick="startSuperOver()">Enter Mini Super Over ⚔️</button>
+      </div>
+    </div>
+
+    <!-- 5. INTERACTIVE MINI SUPER OVER SCREEN -->
+    <div id="superover-screen" class="hidden">
+      <div class="card">
+        <h2>🔥 MINI SUPER OVER MATCH 🔥</h2>
+        <div style="display: flex; justify-content: space-around; font-size: 18px; margin: 10px 0;">
+          <div>Target: <strong id="so-target" style="color:#f39c12;">18 Runs</strong></div>
+          <div>Score: <strong id="so-score" style="color:#2ecc71;">0/0</strong></div>
+          <div>Balls Left: <strong id="so-balls" style="color:#e74c3c;">6</strong></div>
+        </div>
+        
+        <div id="ball-commentary" style="background:#070a14; padding:8px; border-radius:8px; font-size:13px; min-height:40px; margin-bottom:10px; color:#bbb;">Choose your shot for Ball 1!</div>
+
+        <div class="shot-grid" id="shot-controls">
+          <button class="shot-btn" onclick="playSuperOverBall('defend')">🛡️ Defend (Safe)</button>
+          <button class="shot-btn" onclick="playSuperOverBall('single')">🏃 1 Run</button>
+          <button class="shot-btn" onclick="playSuperOverBall('double')">⚡ 2 Runs</button>
+          <button class="shot-btn" onclick="playSuperOverBall('four')">🏏 4 (Boundary)</button>
+          <button class="shot-btn" onclick="playSuperOverBall('six')">🚀 6 (Six)</button>
+          <button class="shot-btn" onclick="playSuperOverBall('lofted')">💥 Power Shot</button>
+        </div>
+
+        <button type="button" id="restart-btn" class="action-btn hidden" onclick="location.reload()" style="background:#e74c3c;">Play New Auction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING CHAT -->
+  <div id="chat-box" class="hidden">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Chat...">
+      <button type="button" onclick="sendChat()">></button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'bid') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.1);
+        } else if (type === 'gavel') {
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.25);
+          gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.25);
+        }
+      } catch (e) {}
+    }
+
+    let myTeam = { key: 'RCB', name: 'Royal Challengers Bengaluru', logo: '🦁' };
+    let myData = null;
+    let isHost = false;
+
+    function chooseTeam(key, name, logo, el) {
+      document.querySelectorAll('.team-btn').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      myTeam = { key, name, logo };
+    }
+
+    function createRoomAction() {
+      initAudio();
+      const roomCode = document.getElementById('room-input').value.trim();
+      const maxTeams = document.getElementById('max-teams').value;
+      const isSolo = document.getElementById('solo-mode').checked;
+      if (!roomCode) return alert('Kripya Room Code dalein!');
+
+      socket.emit('create-room', {
+        roomCode,
+        teamKey: myTeam.key,
+        teamName: myTeam.name,
+        logo: myTeam.logo,
+        maxTeams,
+        isSolo
+      });
+    }
+
+    function joinRoomAction() {
+      initAudio();
+      const roomCode = document.getElementById('room-input').value.trim();
+      if (!roomCode) return alert('Kripya Room Code dalein!');
+
+      socket.emit('join-room', {
+        roomCode,
+        teamKey: myTeam.key,
+        teamName: myTeam.name,
+        logo: myTeam.logo
+      });
+    }
+
+    socket.on('error-msg', (msg) => alert(msg));
+
+    socket.on('room-joined', ({ roomCode, user, isHost: hostStatus }) => {
+      myData = user;
+      isHost = hostStatus;
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('chat-box').classList.remove('hidden');
+
+      document.getElementById('my-team-name').innerText = user.teamName;
+      document.getElementById('my-team-logo').innerText = user.logo;
+      if (isHost) document.getElementById('host-controls').classList.remove('hidden');
+    });
+
+    socket.on('new-player', ({ player, currentBid, index, total, round, isAccelerated }) => {
+      document.getElementById('round-badge').innerText = isAccelerated ? `⚡ Acc (R${round})` : `Round ${round || 1}`;
+      document.getElementById('player-name').innerText = player.name;
+      document.getElementById('player-role').innerText = player.role;
+      document.getElementById('player-img').src = player.img;
+      document.getElementById('player-progress').innerText = `Player ${index} / ${total}`;
+      
+      const cBadge = document.getElementById('player-country');
+      cBadge.innerText = player.country;
+      cBadge.className = player.isOverseas ? "badge badge-os" : "badge badge-ind";
+
+      if (player.stats) {
+        document.getElementById('stat-mat').innerText = player.stats.mat || 0;
+        document.getElementById('stat-runs').innerText = player.stats.runs || 0;
+        document.getElementById('stat-sr').innerText = player.stats.sr || 0.0;
+        document.getElementById('stat-wkt').innerText = player.stats.wkt || 0;
+      }
+
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = "None";
+      document.getElementById('bid-btn').disabled = false;
+    });
+
+    socket.on('timer-tick', (time) => {
+      document.getElementById('timer').innerText = time;
+    });
+
+    socket.on('bid-placed', ({ currentBid, highestBidder }) => {
+      playSound('bid');
+      document.getElementById('current-bid').innerText = currentBid;
+      document.getElementById('bid-leader').innerText = highestBidder;
+    });
+
+    socket.on('player-sold', ({ player, winner, price }) => {
+      playSound('gavel');
+      alert(`🎉 SOLD! ${player.name} (${player.country}) sold to ${winner} for ₹${price}L`);
+    });
+
+    socket.on('player-unsold', ({ player }) => {
+      playSound('gavel');
+      alert(`❌ UNSOLD! ${player.name}`);
+    });
+
+    function formatPurse(lakhs) {
+      return lakhs >= 100 ? `₹ ${(lakhs / 100).toFixed(2)} Cr` : `₹ ${lakhs}L`;
+    }
+
+    socket.on('update-users', (users) => {
+      if (myData && users[socket.id]) {
+        myData = users[socket.id];
+        document.getElementById('my-purse').innerText = formatPurse(myData.purse);
+        document.getElementById('squad-count').innerText = `${myData.squad.length}/16`;
+        document.getElementById('os-count').innerText = `${myData.overseasCount}/6`;
+        document.getElementById('my-squad').innerHTML = myData.squad.map((p, idx) => 
+          `<div>${idx + 1}. ${p.name} [${p.country}] (${p.role}) - ₹${p.price}L</div>`
+        ).join('') || 'Squad me abhi koi player nahi hai.';
+      }
+
+      const lb = document.getElementById('live-leaderboard');
+      lb.innerHTML = Object.values(users).map(u => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#0c0f1c; padding:6px; border-radius:6px; margin-bottom:4px; font-size:13px;">
+          <div><span style="font-size:16px; margin-right:4px;">${u.logo}</span><strong>${u.teamName}</strong></div>
+          <div>Squad: ${u.squad.length}/16 | Purse: <strong style="color:#2ecc71;">${formatPurse(u.purse)}</strong></div>
+        </div>
+      `).join('');
+    });
+
+    function sendChat() {
+      const input = document.getElementById('chat-input');
+      if (input.value.trim()) {
+        socket.emit('send-chat', { message: input.value });
+        input.value = '';
+      }
+    }
+
+    socket.on('new-chat-message', ({ sender, logo, message }) => {
+      const cBox = document.getElementById('chat-messages');
+      const msgEl = document.createElement('div');
+      msgEl.innerHTML = `<span>${logo}</span> <strong>${sender}:</strong> ${message}`;
+      cBox.appendChild(msgEl);
+      cBox.scrollTop = cBox.scrollHeight;
+    });
+
+    socket.on('open-wishlist-modal', ({ remainingPlayers }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('wishlist-screen').classList.remove('hidden');
+
+      const container = document.getElementById('wishlist-items');
+      container.innerHTML = remainingPlayers.map((p) => `
+        <div style="margin: 4px 0; border-bottom:1px solid #1a223f; padding-bottom:4px;">
+          <label>
+            <input type="checkbox" class="wishlist-cb" value="${p.name}"> 
+            <strong>${p.name}</strong> [${p.country}] (${p.role}) - ₹${p.basePrice}L
+          </label>
+        </div>
+      `).join('');
+    });
+
+    function submitWishlist() {
+      const selected = Array.from(document.querySelectorAll('.wishlist-cb:checked')).map(cb => cb.value);
+      socket.emit('submit-wishlist', { selectedPlayerNames: selected });
+      document.getElementById('wishlist-screen').innerHTML = '<div class="card"><h3>⏳ Wishlist Submitted! Waiting for opponents...</h3></div>';
+    }
+
+    socket.on('accelerated-round-start', ({ total }) => {
+      alert(`⚡ Accelerated Fast-Track Round Live! Players: ${total}`);
+      document.getElementById('wishlist-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+    });
+
+    socket.on('auction-ended', ({ users }) => {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('playing11-screen').classList.remove('hidden');
+
+      const p11List = document.getElementById('p11-selection-list');
+      if (myData && myData.squad.length > 0) {
+        p11List.innerHTML = myData.squad.map((p, i) => `
+          <div style="margin: 6px 0; background:#0c0f1c; padding:6px; border-radius:6px;">
+            <input type="checkbox" class="p11-checkbox" value="${i}" ${i < 11 ? 'checked' : ''}> <strong>${p.name}</strong> [${p.country}] (${p.role})
+            <div style="margin-top:4px;">
+              <label><input type="radio" name="captain" value="${i}" ${i === 0 ? 'checked' : ''}> (C)</label>
+              <label style="margin-left:10px;"><input type="radio" name="vc" value="${i}" ${i === 1 ? 'checked' : ''}> (VC)</label>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        p11List.innerHTML = 'No players in squad.';
+      }
+    });
+
+    let soRuns = 0;
+    let soWickets = 0;
+    let soBallsLeft = 6;
+    const soTarget = 18;
+
+    function startSuperOver() {
+      document.getElementById('playing11-screen').classList.add('hidden');
+      document.getElementById('superover-screen').classList.remove('hidden');
+      document.getElementById('so-target').innerText = `${soTarget} Runs`;
+    }
+
+    function playSuperOverBall(shotType) {
+      if (soBallsLeft <= 0 || soWickets >= 2 || soRuns >= soTarget) return;
+
+      initAudio();
+      soBallsLeft--;
+      let commentary = "";
+      let outcome = 0;
+      const rand = Math.random();
+
+      if (shotType === 'defend') {
+        outcome = rand > 0.3 ? 1 : 0;
+        commentary = outcome ? "Solid defense, pushed into the gap for 1 run." : "Dot ball, good line and length.";
+      } else if (shotType === 'single') {
+        outcome = rand > 0.15 ? 1 : 0;
+        commentary = outcome ? "Quick single taken!" : "Straight to the fielder, no run.";
+      } else if (shotType === 'double') {
+        if (rand > 0.3) { outcome = 2; commentary = "Superb running between the wickets, 2 runs!"; }
+        else if (rand > 0.1) { outcome = 1; commentary = "Good stop in the deep, only 1 run."; }
+        else { soWickets++; commentary = "RUN OUT! Attempted a risky second run."; }
+      } else if (shotType === 'four') {
+        if (rand > 0.45) { outcome = 4; commentary = "FOUR! Cracking shot through covers!"; playSound('bid'); }
+        else if (rand > 0.25) { outcome = 1; commentary = "Cut away, deep point cuts it off. 1 run."; }
+        else { soWickets++; commentary = "WICKET! Edged and caught behind!"; playSound('gavel'); }
+      } else if (shotType === 'six') {
+        if (rand > 0.55) { outcome = 6; commentary = "SIX! High, handsome and into the crowd!"; playSound('bid'); }
+        else if (rand > 0.3) { outcome = 0; commentary = "Swing and a miss, beaten by pace!"; }
+        else { soWickets++; commentary = "CAUGHT! Holes out at long-on!"; playSound('gavel'); }
+      } else if (shotType === 'lofted') {
+        if (rand > 0.5) { outcome = rand > 0.8 ? 6 : 4; commentary = `POWER SHOT! Connected cleanly for ${outcome}!`; playSound('bid'); }
+        else { soWickets++; commentary = "OUT! Caught at deep mid-wicket!"; playSound('gavel'); }
+      }
+
+      soRuns += outcome;
+      document.getElementById('so-score').innerText = `${soRuns}/${soWickets}`;
+      document.getElementById('so-balls').innerText = soBallsLeft;
+      document.getElementById('ball-commentary').innerText = commentary;
+
+      if (soRuns >= soTarget) {
+        document.getElementById('ball-commentary').innerHTML = `🎉 <strong>CHAMPIONS! Target Achieved in ${6 - soBallsLeft} balls!</strong>`;
+        endSuperOverGame();
+      } else if (soWickets >= 2) {
+        document.getElementById('ball-commentary').innerHTML = `❌ <strong>ALL OUT! You fell short by ${soTarget - soRuns} runs.</strong>`;
+        endSuperOverGame();
+      } else if (soBallsLeft === 0) {
+        document.getElementById('ball-commentary').innerHTML = `❌ <strong>MATCH OVER! You fell short by ${soTarget - soRuns} runs.</strong>`;
+        endSuperOverGame();
+      }
+    }
+
+    function endSuperOverGame() {
+      document.getElementById('shot-controls').classList.add('hidden');
+      document.getElementById('restart-btn').classList.remove('hidden');
+    }
+
+    function sendBid() { socket.emit('place-bid'); }
+    function soldPlayer() { socket.emit('host-action-sold'); }
+    function unsoldPlayer() { socket.emit('host-action-unsold'); }
+  </script>
+</body>
+</html>
